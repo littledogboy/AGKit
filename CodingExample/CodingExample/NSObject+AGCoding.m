@@ -28,6 +28,8 @@ static NSString *stringType  = @"NSString"; // NSString 类型
 // 定义属性字典，用来存储 属性名（key）  类型（value）
 // 比如：               age            q
 static NSMutableDictionary *proDic = nil;
+// 静态区的声明周期，生成出来后，与应用程序同步，程序结束后，被释放。
+// 存放在静态区的 字典，并没有归档，
 
 @implementation NSObject (AGCoding)
 
@@ -113,12 +115,13 @@ static NSMutableDictionary *proDic = nil;
     
     self = [self init];
     
-    
     if (self) {
+        
+        // 注意:解档时重新给 proDic赋值
+        [self setProDic];
         
         //  解码，给 属性赋值
         // 注意： 根据属性类型解码，根据属性名 kvc 赋值
-        
         // (1) 获取 字典中的属性名
         for (NSString *proName in proDic) {
             
@@ -151,12 +154,64 @@ static NSMutableDictionary *proDic = nil;
         } // for 循环结束
         
         
-        
     }
-    
     
     return self;
 }
+
+
+// 解档时重新给当前类的proDic赋值
+- (void)setProDic
+{
+    // (1). 给字典分配空间
+    proDic = [NSMutableDictionary dictionary];
+    
+    // (2). 获取类中所有实例变量
+    unsigned int count; // 属性个数
+    // 定义Ivar, copy
+    Ivar *varArray = class_copyIvarList([self class], &count);
+    
+    // (3). for循环，获取属性名称 属性类型
+    for (int i = 0; i < count; i++) {
+        
+        Ivar var = varArray[i];
+        
+        // 1. 获取属性名称 : age      name       image
+        const char *cName = ivar_getName(var); // 属性名c字符串
+        NSString *proName = [[NSString stringWithUTF8String:cName] substringFromIndex:1]; // OC字符串,并且去掉下划线 _
+        
+        // 2. 获取属性类型 : NSInteger NSString  UIImage 等类型
+        const char *cType = ivar_getTypeEncoding(var); // 获取变量类型， c 字符串
+        
+        
+        // 3. 把属性类型 从 c 转化为 oc 字符串
+        // c 字符串 转化为 oc 字符串，会加上 @""
+        // 属性类型
+        NSString *proType = [NSString stringWithUTF8String:cType]; // oc 字符串
+        
+        // 获取 @ 的个数
+        NSArray *array = [proType componentsSeparatedByString:@"@"];
+        
+        // 4. 如果属性字符串中,多了 @"" 把 @"" 去掉
+        if (array.count >= 2) {
+            
+            // 截取前： @"@\"NSString\""
+            // 截取后： @\"NSString\"
+            NSUInteger length = proType.length;
+            proType = [proType substringWithRange:NSMakeRange(2, length - 3)];
+            
+        }
+        
+        
+        // 5. proDic字典赋值 : 属性名（key)_属性类型（value）
+        if (![proName isEqualToString:@"proDic"]) {
+            
+            [proDic setValue:proType forKey:proName];
+        }
+        
+    } // for 循环，获取结束
+}
+
 
 
 
